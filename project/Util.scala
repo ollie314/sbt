@@ -1,3 +1,4 @@
+import scala.util.control.NonFatal
 import sbt._
 import Keys._
 import StringUtilities.normalize
@@ -23,7 +24,21 @@ object Util {
     scalacOptions ++= Seq("-Xelide-below", "0"),
     scalacOptions <++= scalaVersion map CrossVersion.partialVersion map {
       case Some((2, 9)) | Some((2, 8)) => Nil // support 2.9 for some subprojects for the Scala Eclipse IDE
-      case _                           => Seq("-feature", "-language:implicitConversions", "-language:postfixOps", "-language:higherKinds", "-language:existentials")
+      case _ => Seq(
+        "-encoding", "utf8",
+        "-deprecation", "-feature", "-unchecked", "-Xlint",
+        "-language:existentials",
+        "-language:higherKinds",
+        "-language:implicitConversions",
+        "-language:postfixOps",
+        "-Xfuture",
+        "-Yinline-warnings",
+        "-Yno-adapted-args",
+        "-Ywarn-dead-code",
+        "-Ywarn-numeric-widen",
+        "-Ywarn-unused",
+        "-Ywarn-unused-import"
+      )
     },
     scalacOptions <++= scalaVersion map CrossVersion.partialVersion map {
       case Some((2, 10)) => Seq("-deprecation", "-Xlint")
@@ -152,5 +167,5 @@ object Licensed {
   def extractLicenses0(base: File, note: File, s: TaskStreams): Seq[File] =
     if (!note.exists) Nil else
       try { seePaths(base, IO.read(note)) }
-      catch { case e: Exception => s.log.warn("Could not read NOTICE"); Nil }
+      catch { case NonFatal(e) => s.log.warn("Could not read NOTICE"); Nil }
 }

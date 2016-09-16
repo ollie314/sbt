@@ -6,19 +6,16 @@ package sbt
 /** An abstraction on top of Settings for build configuration and task definition. */
 
 import java.io.File
-import java.net.URI
 
 import ConcurrentRestrictions.Tag
 import Def.{ Initialize, KeyedInitialize, ScopedKey, Setting, setting }
-import sbt.io.{ FileFilter, Path, PathFinder }
+import sbt.io.{ FileFilter, PathFinder }
 import sbt.io.syntax._
 import std.TaskExtra.{ task => mktask, _ }
-import Task._
 import sbt.internal.util.Types._
 import sbt.internal.util.{ ~>, AList, AttributeKey, Settings, SourcePosition }
 
 import language.experimental.macros
-import reflect.internal.annotations.compileTimeOnly
 
 sealed trait Scoped { def scope: Scope; val key: AttributeKey[_] }
 
@@ -42,8 +39,8 @@ sealed abstract class SettingKey[T] extends ScopedTaskable[T] with KeyedInitiali
   final def :=(v: T): Setting[T] = macro std.TaskMacro.settingAssignMacroImpl[T]
   final def +=[U](v: U)(implicit a: Append.Value[T, U]): Setting[T] = macro std.TaskMacro.settingAppend1Impl[T, U]
   final def ++=[U](vs: U)(implicit a: Append.Values[T, U]): Setting[T] = macro std.TaskMacro.settingAppendNImpl[T, U]
-  final def <+=[V](v: Initialize[V])(implicit a: Append.Value[T, V]): Setting[T] = macro std.TaskMacro.settingAppend1Position[T, V]
-  final def <++=[V](vs: Initialize[V])(implicit a: Append.Values[T, V]): Setting[T] = macro std.TaskMacro.settingAppendNPosition[T, V]
+  final def <+=[V](v: Initialize[V])(implicit a: Append.Value[T, V]): Setting[T] = macro std.TaskMacro.fakeSettingAppend1Position[T, V]
+  final def <++=[V](vs: Initialize[V])(implicit a: Append.Values[T, V]): Setting[T] = macro std.TaskMacro.fakeSettingAppendNPosition[T, V]
   final def -=[U](v: U)(implicit r: Remove.Value[T, U]): Setting[T] = macro std.TaskMacro.settingRemove1Impl[T, U]
   final def --=[U](vs: U)(implicit r: Remove.Values[T, U]): Setting[T] = macro std.TaskMacro.settingRemoveNImpl[T, U]
   final def ~=(f: T => T): Setting[T] = macro std.TaskMacro.settingTransformPosition[T]
@@ -73,8 +70,8 @@ sealed abstract class TaskKey[T] extends ScopedTaskable[T] with KeyedInitialize[
 
   def +=[U](v: U)(implicit a: Append.Value[T, U]): Setting[Task[T]] = macro std.TaskMacro.taskAppend1Impl[T, U]
   def ++=[U](vs: U)(implicit a: Append.Values[T, U]): Setting[Task[T]] = macro std.TaskMacro.taskAppendNImpl[T, U]
-  def <+=[V](v: Initialize[Task[V]])(implicit a: Append.Value[T, V]): Setting[Task[T]] = macro std.TaskMacro.taskAppend1Position[T, V]
-  def <++=[V](vs: Initialize[Task[V]])(implicit a: Append.Values[T, V]): Setting[Task[T]] = macro std.TaskMacro.taskAppendNPosition[T, V]
+  def <+=[V](v: Initialize[Task[V]])(implicit a: Append.Value[T, V]): Setting[Task[T]] = macro std.TaskMacro.fakeTaskAppend1Position[T, V]
+  def <++=[V](vs: Initialize[Task[V]])(implicit a: Append.Values[T, V]): Setting[Task[T]] = macro std.TaskMacro.fakeTaskAppendNPosition[T, V]
   final def -=[U](v: U)(implicit r: Remove.Value[T, U]): Setting[Task[T]] = macro std.TaskMacro.taskRemove1Impl[T, U]
   final def --=[U](vs: U)(implicit r: Remove.Values[T, U]): Setting[Task[T]] = macro std.TaskMacro.taskRemoveNImpl[T, U]
 
@@ -125,17 +122,17 @@ object Scoped {
    *  }}}
    *
    */
-  sealed trait ScopingSetting[Result] {
-    def in(s: Scope): Result
+  sealed trait ScopingSetting[ResultType] {
+    def in(s: Scope): ResultType
 
-    def in(p: Reference): Result = in(Select(p), This, This)
-    def in(t: Scoped): Result = in(This, This, Select(t.key))
-    def in(c: ConfigKey): Result = in(This, Select(c), This)
-    def in(c: ConfigKey, t: Scoped): Result = in(This, Select(c), Select(t.key))
-    def in(p: Reference, c: ConfigKey): Result = in(Select(p), Select(c), This)
-    def in(p: Reference, t: Scoped): Result = in(Select(p), This, Select(t.key))
-    def in(p: Reference, c: ConfigKey, t: Scoped): Result = in(Select(p), Select(c), Select(t.key))
-    def in(p: ScopeAxis[Reference], c: ScopeAxis[ConfigKey], t: ScopeAxis[AttributeKey[_]]): Result = in(Scope(p, c, t, This))
+    def in(p: Reference): ResultType = in(Select(p), This, This)
+    def in(t: Scoped): ResultType = in(This, This, Select(t.key))
+    def in(c: ConfigKey): ResultType = in(This, Select(c), This)
+    def in(c: ConfigKey, t: Scoped): ResultType = in(This, Select(c), Select(t.key))
+    def in(p: Reference, c: ConfigKey): ResultType = in(Select(p), Select(c), This)
+    def in(p: Reference, t: Scoped): ResultType = in(Select(p), This, Select(t.key))
+    def in(p: Reference, c: ConfigKey, t: Scoped): ResultType = in(Select(p), Select(c), Select(t.key))
+    def in(p: ScopeAxis[Reference], c: ScopeAxis[ConfigKey], t: ScopeAxis[AttributeKey[_]]): ResultType = in(Scope(p, c, t, This))
   }
 
   def scopedSetting[T](s: Scope, k: AttributeKey[T]): SettingKey[T] = new SettingKey[T] { val scope = s; val key = k }
@@ -150,12 +147,7 @@ object Scoped {
 
     private[sbt] final def :==(app: S): Setting[S] = macro std.TaskMacro.settingAssignPure[S]
 
-    /**
-     * Binds a single value to this. A new [Def.Setting] is defined using the value(s) of `app`.
-     * @param app value to bind to this key
-     * @return setting binding this key to the given value.
-     */
-    final def <<=(app: Initialize[S]): Setting[S] = macro std.TaskMacro.settingAssignPosition[S]
+    final def <<=(app: Initialize[S]): Setting[S] = macro std.TaskMacro.fakeSettingAssignPosition[S]
 
     /** Internally used function for setting a value along with the `.sbt` file location where it is defined. */
     final def set(app: Initialize[S], source: SourcePosition): Setting[S] = setting(scopedKey, app, source)
@@ -201,7 +193,7 @@ object Scoped {
     def :=(v: S): Setting[Task[S]] = macro std.TaskMacro.taskAssignMacroImpl[S]
     def ~=(f: S => S): Setting[Task[S]] = macro std.TaskMacro.taskTransformPosition[S]
 
-    def <<=(app: Initialize[Task[S]]): Setting[Task[S]] = macro std.TaskMacro.itaskAssignPosition[S]
+    def <<=(app: Initialize[Task[S]]): Setting[Task[S]] = macro std.TaskMacro.fakeItaskAssignPosition[S]
     def set(app: Initialize[Task[S]], source: SourcePosition): Setting[Task[S]] = Def.setting(scopedKey, app, source)
     def transform(f: S => S, source: SourcePosition): Setting[Task[S]] = set(scopedKey(_ map f), source)
 

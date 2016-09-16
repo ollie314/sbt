@@ -4,7 +4,6 @@ package internal
 import sbt.librarymanagement.{ Configuration, Configurations, ModuleID, Resolver, SbtArtifacts, UpdateReport }
 import sbt.internal.util.Attributed
 import Def.{ ScopedKey, Setting }
-import Scoped._
 import Keys._
 import Configurations.{ Compile, Runtime }
 import java.io.File
@@ -19,7 +18,10 @@ object GlobalPlugin {
     Seq[Setting[_]](
       projectDescriptors ~= { _ ++ gp.descriptors },
       projectDependencies ++= gp.projectID +: gp.dependencies,
-      resolvers <<= resolvers { rs => (rs ++ gp.resolvers).distinct },
+      resolvers := {
+        val rs = resolvers.value
+        (rs ++ gp.resolvers).distinct
+      },
       globalPluginUpdate := gp.updateReport,
       // TODO: these shouldn't be required (but are): the project* settings above should take care of this
       injectInternalClasspath(Runtime, gp.internalClasspath),
@@ -75,7 +77,7 @@ object GlobalPlugin {
     }
   val globalPluginSettings = Project.inScope(Scope.GlobalScope in LocalRootProject)(Seq(
     organization := SbtArtifacts.Organization,
-    onLoadMessage <<= Keys.baseDirectory("Loading global plugins from " + _),
+    onLoadMessage := Keys.baseDirectory("Loading global plugins from " + _).value,
     name := "global-plugin",
     sbtPlugin := true,
     version := "0.0"

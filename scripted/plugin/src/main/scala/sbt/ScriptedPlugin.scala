@@ -8,8 +8,7 @@ import Keys._
 import sbt.internal.util.complete.{ Parser, DefaultParsers }
 import sbt.internal.inc.classpath.ClasspathUtilities
 import sbt.internal.inc.ModuleUtilities
-import java.lang.reflect.{ InvocationTargetException, Method }
-import java.util.Properties
+import java.lang.reflect.Method
 
 import sbt.syntax._
 
@@ -34,7 +33,7 @@ object ScriptedPlugin extends AutoPlugin {
   override lazy val projectSettings = Seq(
     ivyConfigurations ++= Seq(scriptedConf, scriptedLaunchConf),
     scriptedSbt := sbtVersion.value,
-    sbtLauncher <<= getJars(scriptedLaunchConf).map(_.get.head),
+    sbtLauncher := getJars(scriptedLaunchConf).map(_.get.head).value,
     sbtTestDirectory := sourceDirectory.value / "sbt-test",
     libraryDependencies ++= Seq(
       "org.scala-sbt" %% "scripted-sbt" % scriptedSbt.value % scriptedConf.toString,
@@ -42,11 +41,15 @@ object ScriptedPlugin extends AutoPlugin {
     ),
     scriptedBufferLog := true,
     scriptedClasspath := getJars(scriptedConf).value,
-    scriptedTests <<= scriptedTestsTask,
-    scriptedRun <<= scriptedRunTask,
-    scriptedDependencies <<= (compile in Test, publishLocal) map { (analysis, pub) => Unit },
+    scriptedTests := scriptedTestsTask.value,
+    scriptedRun := scriptedRunTask.value,
+    scriptedDependencies := {
+      val analysis = (compile in Test).value
+      val pub = (publishLocal).value
+      Unit
+    },
     scriptedLaunchOpts := Seq(),
-    scripted <<= scriptedTask
+    scripted := scriptedTask.evaluated
   )
 
   def scriptedTestsTask: Initialize[Task[AnyRef]] = (scriptedClasspath, scalaInstance) map {
@@ -78,7 +81,7 @@ object ScriptedPlugin extends AutoPlugin {
 
   def scriptedTask: Initialize[InputTask[Unit]] = Def.inputTask {
     val args = scriptedParser(sbtTestDirectory.value).parsed
-    val prereq: Unit = scriptedDependencies.value
+    scriptedDependencies.value
     try {
       scriptedRun.value.invoke(
         scriptedTests.value, sbtTestDirectory.value, scriptedBufferLog.value: java.lang.Boolean,

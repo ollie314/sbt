@@ -2,8 +2,8 @@ import java.net.URLClassLoader
 
 lazy val root = (project in file(".")).
   settings(
-    TaskKey[Unit]("check-first") <<= checkTask("First"),
-    TaskKey[Unit]("check-second") <<= checkTask("Second")
+    TaskKey[Unit]("checkFirst") := checkTask("First").value,
+    TaskKey[Unit]("checkSecond") := checkTask("Second").value
   )
 
 def checkTask(className: String) =

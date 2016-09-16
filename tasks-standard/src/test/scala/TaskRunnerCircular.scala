@@ -3,7 +3,6 @@ package sbt
 import org.scalacheck._
 import Prop._
 import TaskGen._
-import Task._
 
 object TaskRunnerCircularTest extends Properties("TaskRunner Circular") {
   property("Catches circular references") = forAll(MaxTasksGen, MaxWorkersGen) { checkCircularReferences _ }
@@ -34,5 +33,5 @@ object TaskRunnerCircularTest extends Properties("TaskRunner Circular") {
       try { tryRun(top, true, workers); false }
       catch { case i: Incomplete => cyclic(i) }
     }
-  def cyclic(i: Incomplete) = Incomplete.allExceptions(i).exists(_.isInstanceOf[Execute[Task]#CyclicException[_]])
+  def cyclic(i: Incomplete) = Incomplete.allExceptions(i).exists(_.isInstanceOf[Execute[({ type A[_] <: AnyRef})#A]#CyclicException[_]])
 }

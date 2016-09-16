@@ -2,8 +2,7 @@ package sbt
 
 import sbt.internal.util.complete.Parser
 import Def.{ Initialize, ScopedKey }
-import std.TaskExtra.{ task => mktask, _ }
-import Task._
+import std.TaskExtra._
 import sbt.internal.util.{ ~>, AttributeKey, Types }
 import sbt.internal.util.Types._
 
@@ -128,20 +127,20 @@ object InputTask {
     {
       val seen = new java.util.IdentityHashMap[Task[_], Task[_]]
       lazy val f: Task ~> Task = new (Task ~> Task) {
-        def apply[T](t: Task[T]): Task[T] =
+        def apply[A](t: Task[A]): Task[A] =
           {
             val t0 = seen.get(t)
             if (t0 == null) {
               val newAction =
                 if (t.info.get(marker).isDefined)
-                  Pure(() => value.asInstanceOf[T], inline = true)
+                  Pure(() => value.asInstanceOf[A], inline = true)
                 else
                   t.work.mapTask(f)
               val newTask = Task(t.info, newAction)
               seen.put(t, newTask)
               newTask
             } else
-              t0.asInstanceOf[Task[T]]
+              t0.asInstanceOf[Task[A]]
           }
       }
       f(task)

@@ -4,9 +4,8 @@
 package sbt
 package std
 
-import java.io.{ InputStream, IOException, OutputStream, Reader, Writer }
-import java.io.{ BufferedInputStream, BufferedOutputStream, BufferedReader, BufferedWriter, PrintWriter }
-import java.io.{ Closeable, File, FileInputStream, FileOutputStream, InputStreamReader, OutputStreamWriter }
+import java.io.{ BufferedInputStream, BufferedOutputStream, BufferedReader, BufferedWriter, Closeable, File, 
+  FileInputStream, FileOutputStream, IOException, InputStreamReader, OutputStreamWriter, PrintWriter }
 
 import sbt.internal.io.DeferredWriter
 import sbt.io.IO
@@ -65,8 +64,8 @@ sealed trait TaskStreams[Key] {
   private[this] def getID(s: Option[String]) = s getOrElse default
 }
 sealed trait ManagedStreams[Key] extends TaskStreams[Key] {
-  def open()
-  def close()
+  def open(): Unit
+  def close(): Unit
   def isClosed: Boolean
 }
 

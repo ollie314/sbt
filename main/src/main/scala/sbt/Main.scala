@@ -3,8 +3,24 @@
  */
 package sbt
 
-import sbt.internal.{ Load, EvaluateConfigurations, LoadedBuildUnit, Aggregation, BuildStructure, Act, Inspect, BuildUnit, Output, PluginsDebug }
-import sbt.internal.{ SettingCompletions, CommandStrings, IvyConsole, ProjectNavigation, Script, SessionSettings }
+import sbt.internal.{
+  Act,
+  Aggregation,
+  BuildStructure,
+  BuildUnit,
+  CommandStrings,
+  EvaluateConfigurations,
+  Inspect,
+  IvyConsole,
+  Load,
+  LoadedBuildUnit,
+  Output,
+  PluginsDebug,
+  ProjectNavigation,
+  Script,
+  SessionSettings,
+  SettingCompletions
+}
 import sbt.internal.util.{ AttributeKey, AttributeMap, complete, ConsoleOut, GlobalLogging, LineRange, MainLogging, SimpleReader, Types }
 import sbt.util.{ Level, Logger }
 
@@ -31,7 +47,7 @@ final class xMain extends xsbti.AppMain {
     {
       import BasicCommands.early
       import BasicCommandStrings.runEarly
-      import BuiltinCommands.{ initialize, defaults }
+      import BuiltinCommands.defaults
       import sbt.internal.CommandStrings.{ BootCommand, DefaultsCommand, InitCommand }
       runManaged(initialState(configuration,
         Seq(defaults, early),
@@ -41,10 +57,13 @@ final class xMain extends xsbti.AppMain {
 }
 final class ScriptMain extends xsbti.AppMain {
   def run(configuration: xsbti.AppConfiguration): xsbti.MainResult =
-    runManaged(initialState(configuration,
-      BuiltinCommands.ScriptCommands,
-      Script.Name :: Nil)
-    )
+    {
+      import BasicCommandStrings.runEarly
+      runManaged(initialState(configuration,
+        BuiltinCommands.ScriptCommands,
+        runEarly(Level.Error.toString) :: Script.Name :: Nil)
+      )
+    }
 }
 final class ConsoleMain extends xsbti.AppMain {
   def run(configuration: xsbti.AppConfiguration): xsbti.MainResult =
@@ -126,7 +145,7 @@ object BuiltinCommands {
 
   def aboutPlugins(e: Extracted): String =
     {
-      def list(b: BuildUnit) = b.plugins.detected.autoPlugins.map(_.value.label) ++ b.plugins.detected.plugins.names
+      def list(b: BuildUnit) = b.plugins.detected.autoPlugins.map(_.value.label)
       val allPluginNames = e.structure.units.values.flatMap(u => list(u.unit)).toSeq.distinct
       if (allPluginNames.isEmpty) "" else allPluginNames.mkString("Available Plugins: ", ", ", "")
     }
@@ -134,7 +153,7 @@ object BuiltinCommands {
     {
       val scalaVersion = e.getOpt(Keys.scalaVersion)
       val scalaHome = e.getOpt(Keys.scalaHome).flatMap(idFun)
-      val instance = e.getOpt(Keys.scalaInstance.task).flatMap(_ => quiet(e.runTask(Keys.scalaInstance, s)._2))
+      val instance = e.getOpt(Keys.scalaInstance).flatMap(_ => quiet(e.runTask(Keys.scalaInstance, s)._2))
       (scalaVersion, scalaHome, instance) match {
         case (sv, Some(home), Some(si)) => "local Scala version " + selectScalaVersion(sv, si) + " at " + home.getAbsolutePath
         case (_, Some(home), None)      => "a local Scala build at " + home.getAbsolutePath
@@ -285,7 +304,7 @@ object BuiltinCommands {
 
   def lastGrep = Command(LastGrepCommand, lastGrepBrief, lastGrepDetailed)(lastGrepParser) {
     case (s, (pattern, Some(sks))) =>
-      val (str, ref, display) = extractLast(s)
+      val (str, _, display) = extractLast(s)
       Output.lastGrep(sks, str.streams(s), pattern, printLast(s))(display)
       keepLastLog(s)
     case (s, (pattern, None)) =>
@@ -333,7 +352,7 @@ object BuiltinCommands {
       } yield () => {
         def export0(s: State): State = lastImpl(s, kvs, Some(ExportStream))
         val newS = try f() catch {
-          case e: Exception =>
+          case NonFatal(e) =>
             try export0(s)
             finally { throw e }
         }
@@ -352,7 +371,7 @@ object BuiltinCommands {
 
   private[this] def lastImpl(s: State, sks: AnyKeys, sid: Option[String]): State =
     {
-      val (str, ref, display) = extractLast(s)
+      val (str, _, display) = extractLast(s)
       Output.last(sks, str.streams(s), printLast(s), sid)(display)
       keepLastLog(s)
     }
@@ -460,20 +479,17 @@ object BuiltinCommands {
     {
       val result = (SimpleReader.readLine("Project loading failed: (r)etry, (q)uit, (l)ast, or (i)gnore? ") getOrElse Quit).toLowerCase(Locale.ENGLISH)
       def matches(s: String) = !result.isEmpty && (s startsWith result)
+      def retry = loadProjectCommand(LoadProject, loadArg) :: s.clearGlobalLog
+      def ignoreMsg = if (Project.isProjectLoaded(s)) "using previously loaded project" else "no project loaded"
 
-      if (result.isEmpty || matches("retry"))
-        loadProjectCommand(LoadProject, loadArg) :: s.clearGlobalLog
-      else if (matches(Quit))
-        s.exit(ok = false)
-      else if (matches("ignore")) {
-        val hadPrevious = Project.isProjectLoaded(s)
-        s.log.warn("Ignoring load failure: " + (if (hadPrevious) "using previously loaded project." else "no project loaded."))
-        s
-      } else if (matches("last"))
-        LastCommand :: loadProjectCommand(LoadFailed, loadArg) :: s
-      else {
-        println("Invalid response.")
-        doLoadFailed(s, loadArg)
+      result match {
+        case ""                    => retry
+        case _ if matches("retry") => retry
+        case _ if matches(Quit)    => s.exit(ok = false)
+        case _ if matches("ignore") =>
+          s.log.warn(s"Ignoring load failure: $ignoreMsg."); s
+        case _ if matches("last") => LastCommand :: loadProjectCommand(LoadFailed, loadArg) :: s
+        case _                    => println("Invalid response."); doLoadFailed(s, loadArg)
       }
     }
 

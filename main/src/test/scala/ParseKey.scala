@@ -1,7 +1,6 @@
 package sbt
 
 import Def.{ displayFull, displayMasked, ScopedKey }
-import java.net.URI
 import sbt.internal.{ TestBuild, Resolve }
 import TestBuild._
 import sbt.internal.util.complete._
@@ -32,7 +31,7 @@ object ParseKey extends Properties("Key parser test") {
         parseExpected(structure, string, expected, mask)
     }
 
-  property("An unspecified project axis resolves to the current project") =
+  property("An unspecified project axis resolves to the current project or the build of the current project") =
     forAllNoShrink(structureDefinedKey) { (skm: StructureKeyMask) =>
       import skm.{ structure, key }
 
@@ -44,7 +43,7 @@ object ParseKey extends Properties("Key parser test") {
         ("Current: " + structure.current) |:
         parse(structure, string) {
           case Left(err) => false
-          case Right(sk) => sk.scope.project == Select(structure.current)
+          case Right(sk) => sk.scope.project == Select(structure.current) || sk.scope.project == Select(BuildRef(structure.current.build))
         }
     }
 

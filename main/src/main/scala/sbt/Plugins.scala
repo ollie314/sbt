@@ -71,7 +71,7 @@ abstract class AutoPlugin extends Plugins.Basic with PluginsFunctions {
 
   /** This AutoPlugin requires the plugins the [[Plugins]] matcher returned by this method. See [[trigger]].
    */
-  def requires: Plugins = empty
+  def requires: Plugins = plugins.JvmPlugin
 
   val label: String = getClass.getName.stripSuffix("$")
 
@@ -341,7 +341,7 @@ ${listConflicts(conflicting)}""")
     val m = ru.runtimeMirror(loader)
     val im = m.reflect(ap)
     val hasGetterOpt = catching(classOf[ScalaReflectionException]) opt {
-      im.symbol.asType.toType.declaration(ru.newTermName("autoImport")) match {
+      im.symbol.asType.toType.decl(ru.TermName("autoImport")) match {
         case ru.NoSymbol => false
         case sym => sym.asTerm.isGetter || sym.asTerm.isModule
       }

@@ -5,10 +5,9 @@ import sbt.internal.util.{ AttributeKey, Dag, Types }
 
 import sbt.librarymanagement.Configuration
 
-import Types.{ const, idFun }
+import Types.const
 import Def.Initialize
 import java.net.URI
-import ScopeFilter.Data
 
 object ScopeFilter {
   type ScopeFilter = Base[Scope]
@@ -187,7 +186,7 @@ object ScopeFilter {
   /** Base functionality for filters on values of type `In` that need access to build data.*/
   sealed abstract class Base[In] { self =>
     /** Implements this filter. */
-    private[sbt] def apply(data: Data): In => Boolean
+    private[ScopeFilter] def apply(data: Data): In => Boolean
 
     /** Constructs a filter that selects values that match this filter but not `other`.*/
     def --(other: Base[In]): Base[In] = this && -other

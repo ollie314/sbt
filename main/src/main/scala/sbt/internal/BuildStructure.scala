@@ -41,12 +41,14 @@ final class StructureIndex(
  *                The first root project is used as the default in several situations where a project is not otherwise selected.
  */
 final class LoadedBuildUnit(val unit: BuildUnit, val defined: Map[String, ResolvedProject], val rootProjects: Seq[String], val buildSettings: Seq[Setting[_]]) extends BuildUnitBase {
-  assert(rootProjects.nonEmpty, "No root projects defined for build unit " + unit)
   /**
    * The project to use as the default when one is not otherwise selected.
    * [[LocalRootProject]] resolves to this from within the same build.
    */
-  val root = rootProjects.head
+  val root = rootProjects match {
+    case Nil           => throw new java.lang.AssertionError("assertion failed: No root projects defined for build unit " + unit)
+    case Seq(root, _*) => root
+  }
 
   /** The base directory of the build unit (not the build definition).*/
   def localBase = unit.localBase
@@ -123,9 +125,13 @@ case class DetectedAutoPlugin(name: String, value: AutoPlugin, hasAutoImport: Bo
  *
  * @param builds The [[Build]]s detected in the build definition.  This does not include the default [[Build]] that sbt creates if none is defined.
  */
-final class DetectedPlugins(val plugins: DetectedModules[OldPlugin], val autoPlugins: Seq[DetectedAutoPlugin], val builds: DetectedModules[BuildDef]) {
-  /** Sequence of import expressions for the build definition.  This includes the names of the [[Plugin]], [[Build]], and [[AutoImport]] modules, but not the [[AutoPlugin]] modules. */
-  lazy val imports: Seq[String] = BuildUtil.getImports(plugins.names ++ builds.names) ++
+final class DetectedPlugins(val autoPlugins: Seq[DetectedAutoPlugin], val builds: DetectedModules[BuildDef]) {
+  /**
+   * Sequence of import expressions for the build definition.
+   *  This includes the names of the [[BuildDef]], and [[DetectedAutoPlugin]] modules,
+   *  but not the [[AutoPlugin]] modules.
+   */
+  lazy val imports: Seq[String] = BuildUtil.getImports(builds.names) ++
     BuildUtil.importAllRoot(autoImports(autoPluginAutoImports)) ++
     BuildUtil.importAll(autoImports(topLevelAutoPluginAutoImports)) ++
     BuildUtil.importNamesRoot(autoPlugins.map(_.name).filter(nonTopLevelPlugin))
@@ -168,12 +174,6 @@ final class DetectedPlugins(val plugins: DetectedModules[OldPlugin], val autoPlu
  * @param detected Auto-detected modules in the build definition.
  */
 final class LoadedPlugins(val base: File, val pluginData: PluginData, val loader: ClassLoader, val detected: DetectedPlugins) {
-  @deprecated("Use the primary constructor.", "0.13.2")
-  def this(base: File, pluginData: PluginData, loader: ClassLoader, plugins: Seq[OldPlugin], pluginNames: Seq[String]) =
-    this(base, pluginData, loader,
-      new DetectedPlugins(new DetectedModules(pluginNames zip plugins), Nil, new DetectedModules(Nil))
-    )
-
   def fullClasspath: Seq[Attributed[File]] = pluginData.classpath
   def classpath = data(fullClasspath)
 }

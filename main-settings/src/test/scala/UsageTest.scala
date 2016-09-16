@@ -2,7 +2,7 @@ package sbt
 package std
 
 import sbt.internal.util.complete
-import sbt.internal.util.complete.{ DefaultParsers, Parsers }
+import sbt.internal.util.complete.DefaultParsers
 
 /*object UseTask
 {
@@ -20,8 +20,7 @@ import sbt.internal.util.complete.{ DefaultParsers, Parsers }
 }*/
 object Assign {
   import java.io.File
-  import Def.{ inputKey, settingKey, taskKey }
-  import Def.{ Initialize, macroValueT, parserToInput }
+  import Def.{ Initialize, inputKey, macroValueT, parserToInput, settingKey, taskKey }
   //	import UseTask.{x,y,z,a,set,plain}
 
   val ak = taskKey[Int]("a")
@@ -37,8 +36,8 @@ object Assign {
   val dummyt = taskKey[complete.Parser[String]]("dummyt")
   val dummys = settingKey[complete.Parser[String]]("dummys")
   val dummy3 = settingKey[complete.Parser[(String, Int)]]("dummy3")
-  val tsk: complete.Parser[Task[String]] = ???
-  val itsk: Initialize[InputTask[Int]] = ???
+  val tsk: complete.Parser[Task[String]] = DefaultParsers.failure("ignored")
+  val itsk: Initialize[InputTask[Int]] = inputKey[Int]("ignored")
   val seqSetting = settingKey[Seq[String]]("seqSetting")
   val listSetting = settingKey[List[String]]("listSetting")
 
@@ -73,7 +72,7 @@ object Assign {
   }
 
   val it3: Initialize[InputTask[String]] = Def.inputTask[String] {
-    tsk.parsed.value + itsk.parsed.value.toString + isk.value
+    tsk.parsed.value + itsk.parsed.value.toString + isk.evaluated
   }
   // should not compile: cannot use a task to define the parser
   /*	val it4 = Def.inputTask {

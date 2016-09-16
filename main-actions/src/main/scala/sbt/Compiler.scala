@@ -3,16 +3,14 @@
  */
 package sbt
 
-import sbt.internal.inc.javac.{ IncrementalCompilerJavaTools, JavaTools }
-import sbt.internal.inc.{ Analysis, AnalyzingCompiler, ClasspathOptions, CompileOutput, ComponentCompiler, IncrementalCompilerImpl, JavaTool, Locate, LoggerReporter, ScalaInstance }
+import sbt.internal.inc.javac.JavaTools
+import sbt.internal.inc.{ AnalyzingCompiler, ComponentCompiler, ScalaInstance }
 import xsbti.{ Logger => _, _ }
-import xsbti.compile.{ CompileOrder, Compilers, CompileResult, GlobalsCache, IncOptions, Inputs, MiniSetup }
-import CompileOrder.{ JavaThenScala, Mixed, ScalaThenJava }
-import Locate.DefinesClass
+import xsbti.compile.{ ClasspathOptions, Compilers, CompileResult, Inputs }
 import java.io.File
 
 import sbt.internal.librarymanagement.{ ComponentManager, IvyConfiguration }
-import sbt.librarymanagement.{ ModuleID, CrossVersion, VersionNumber }
+import sbt.librarymanagement.{ ModuleID, VersionNumber }
 import sbt.util.Logger
 
 object Compiler {
@@ -121,7 +119,7 @@ object Compiler {
     ivyConfiguration: IvyConfiguration, sourcesModule: ModuleID)(implicit app: AppConfiguration, log: Logger): Compilers = {
     val scalac = scalaCompiler(instance, cpOptions, javaHome, ivyConfiguration, sourcesModule)
     val javac = JavaTools.directOrFork(instance, cpOptions, javaHome)
-    IncrementalCompilerImpl.Compilers(scalac, javac)
+    new Compilers(scalac, javac)
   }
   def scalaCompiler(instance: ScalaInstance, cpOptions: ClasspathOptions, javaHome: Option[File], ivyConfiguration: IvyConfiguration, sourcesModule: ModuleID)(implicit app: AppConfiguration, log: Logger): AnalyzingCompiler =
     {

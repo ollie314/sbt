@@ -4,11 +4,10 @@
 package sbt
 
 import java.io.File
-import sbt.internal.inc.{ AnalyzingCompiler, IncrementalCompilerImpl }
-import sbt.internal.util.JLine
+import sbt.internal.inc.AnalyzingCompiler
 import sbt.util.Logger
 
-import xsbti.compile.Inputs
+import xsbti.compile.{ Inputs, Compilers }
 
 final class Console(compiler: AnalyzingCompiler) {
   /** Starts an interactive scala interpreter session with the given classpath.*/
@@ -32,6 +31,6 @@ final class Console(compiler: AnalyzingCompiler) {
 object Console {
   def apply(conf: Inputs): Console =
     conf.compilers match {
-      case IncrementalCompilerImpl.Compilers(scalac, _) => new Console(scalac)
+      case cs: Compilers => new Console(cs.scalac match { case x: AnalyzingCompiler => x })
     }
 }

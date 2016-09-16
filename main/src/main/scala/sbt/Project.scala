@@ -7,16 +7,15 @@ import java.io.File
 import java.net.URI
 import java.util.Locale
 import Project._
-import Keys.{ appConfiguration, stateBuildStructure, commands, configuration, historyPath, projectCommand, sessionSettings, shellPrompt, thisProject, thisProjectRef, watch }
+import Keys.{ stateBuildStructure, commands, configuration, historyPath, projectCommand, sessionSettings,
+  shellPrompt, watch }
 import Scope.{ GlobalScope, ThisScope }
 import Def.{ Flattened, Initialize, ScopedKey, Setting }
 import sbt.internal.{ Load, BuildStructure, LoadedBuild, LoadedBuildUnit, SettingGraph, SettingCompletions, AddSettings, SessionSettings }
-import sbt.internal.util.Eval
+import sbt.internal.util.{ AttributeKey, AttributeMap, Dag, Eval, Relation, Settings, Show, ~> }
 import sbt.internal.util.Types.{ const, idFun }
 import sbt.internal.util.complete.DefaultParsers
 import sbt.librarymanagement.Configuration
-
-import sbt.internal.util.{ AttributeKey, AttributeMap, Dag, Relation, Settings, Show, ~> }
 
 import language.experimental.macros
 
@@ -386,11 +385,11 @@ object Project extends ProjectExtra {
     {
       val structure = Project.structure(s)
       val ref = Project.current(s)
-      val project = Load.getProject(structure.units, ref.build, ref.project)
+      Load.getProject(structure.units, ref.build, ref.project)
       val msg = Keys.onLoadMessage in ref get structure.data getOrElse ""
       if (!msg.isEmpty) s.log.info(msg)
       def get[T](k: SettingKey[T]): Option[T] = k in ref get structure.data
-      def commandsIn(axis: ResolvedReference) = commands in axis get structure.data toList;
+      def commandsIn(axis: ResolvedReference) = commands in axis get structure.data toList
 
       val allCommands = commandsIn(ref) ++ commandsIn(BuildRef(ref.build)) ++ (commands in Global get structure.data toList)
       val history = get(historyPath) flatMap idFun
@@ -592,7 +591,8 @@ object Project extends ProjectExtra {
       val p = EvaluateTask.executeProgress(extracted, extracted.structure, state)
       val r = EvaluateTask.restrictions(state)
       val fgc = EvaluateTask.forcegc(extracted, extracted.structure)
-      runTask(taskKey, state, EvaluateTaskConfig(r, checkCycles, p, ch, fgc))
+      val mfi = EvaluateTask.minForcegcInterval(extracted, extracted.structure)
+      runTask(taskKey, state, EvaluateTaskConfig(r, checkCycles, p, ch, fgc, mfi))
     }
   def runTask[T](taskKey: ScopedKey[Task[T]], state: State, config: EvaluateTaskConfig): Option[(State, Result[T])] = {
     val extracted = Project.extract(state)
@@ -612,13 +612,12 @@ object Project extends ProjectExtra {
       (i, Keys.resolvedScoped)((t, scoped) => tx(t, (state, value) => set(resolveContext(key, scoped.scope, state), state, value)))
   }
 
-  import scala.reflect._
   import reflect.macros._
 
   def projectMacroImpl(c: Context): c.Expr[Project] =
     {
       import c.universe._
-      val enclosingValName = std.KeyMacro.definingValName(c, methodName => s"""$methodName must be directly assigned to a val, such as `val x = $methodName`.""")
+      val enclosingValName = std.KeyMacro.definingValName(c, methodName => s"""$methodName must be directly assigned to a val, such as `val x = $methodName`. Alternatively, you can use `sbt.Project.apply`""")
       val name = c.Expr[String](Literal(Constant(enclosingValName)))
       reify { Project(name.splice, new File(name.splice)) }
     }
@@ -627,21 +626,21 @@ object Project extends ProjectExtra {
 private[sbt] trait GeneratedRootProject
 
 trait ProjectExtra0 {
-   implicit def wrapProjectReferenceSeqEval[T <% ProjectReference](rs: => Seq[T]): Seq[Eval[ProjectReference]] =
+   implicit def wrapProjectReferenceSeqEval[T](rs: => Seq[T])(implicit ev: T => ProjectReference): Seq[Eval[ProjectReference]] =
     rs map { r => Eval.later(r: ProjectReference) }
 }
 
 trait ProjectExtra extends ProjectExtra0 {
-  implicit def classpathDependencyEval[T <% ClasspathDep[ProjectReference]](p: => T): Eval[ClasspathDep[ProjectReference]] =
+  implicit def classpathDependencyEval[T](p: => T)(implicit ev: T => ClasspathDep[ProjectReference]): Eval[ClasspathDep[ProjectReference]] =
     Eval.later(p: ClasspathDep[ProjectReference])
-  implicit def wrapProjectReferenceEval[T <% ProjectReference](ref: => T): Eval[ProjectReference] =
+  implicit def wrapProjectReferenceEval[T](ref: => T)(implicit ev: T => ProjectReference): Eval[ProjectReference] =
     Eval.later(ref: ProjectReference)
 
-  implicit def wrapSettingDefinitionEval[T <% Def.SettingsDefinition](d: => T): Eval[Def.SettingsDefinition] = Eval.later(d)
+  implicit def wrapSettingDefinitionEval[T](d: => T)(implicit ev: T => Def.SettingsDefinition): Eval[Def.SettingsDefinition] = Eval.later(d)
   implicit def wrapSettingSeqEval(ss: => Seq[Setting[_]]): Eval[Def.SettingsDefinition] = Eval.later(new Def.SettingList(ss))
 
-  implicit def configDependencyConstructor[T <% ProjectReference](p: T): Constructor = new Constructor(p)
-  implicit def classpathDependency[T <% ProjectReference](p: T): ClasspathDep[ProjectReference] = new ClasspathDependency(p, None)
+  implicit def configDependencyConstructor[T](p: T)(implicit ev: T => ProjectReference): Constructor = new Constructor(p)
+  implicit def classpathDependency[T](p: T)(implicit ev: T => ProjectReference): ClasspathDep[ProjectReference] = new ClasspathDependency(p, None)
 
 
   // These used to be in Project so that they didn't need to get imported (due to Initialize being nested in Project).

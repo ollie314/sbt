@@ -7,7 +7,6 @@
  */
 package sbt
 
-import scala.collection.Set
 import scala.reflect.Manifest
 import scala.collection.concurrent.TrieMap
 
@@ -16,7 +15,6 @@ import Thread.currentThread
 import java.security.Permission
 import java.util.concurrent.{ ConcurrentHashMap => CMap }
 import java.lang.Integer.{ toHexString => hex }
-import java.lang.Long.{ toHexString => hexL }
 
 import sbt.util.Logger
 
@@ -94,7 +92,6 @@ object TrapExit {
 
   // interrupts the given thread, but first replaces the exception handler so that the InterruptedException is not printed
   private def safeInterrupt(thread: Thread, log: Logger): Unit = {
-    val name = thread.getName
     log.debug("Interrupting thread " + thread.getName)
     thread.setUncaughtExceptionHandler(new TrapInterrupt(thread.getUncaughtExceptionHandler))
     thread.interrupt
@@ -485,7 +482,7 @@ private final class TrapExit(delegateManager: SecurityManager) extends SecurityM
       allFrames.foreach(_.dispose) // dispose all top-level windows, which will cause the AWT-EventQueue-* threads to exit
       val waitSeconds = 2
       log.debug(s"Waiting $waitSeconds s to let AWT thread exit.")
-      Thread.sleep(waitSeconds * 1000) // AWT Thread doesn't exit immediately, so wait to interrupt it
+      Thread.sleep(waitSeconds * 1000L) // AWT Thread doesn't exit immediately, so wait to interrupt it
     }
   }
   /** Returns true if the given thread is in the 'system' thread group or is an AWT thread other than AWT-EventQueue.*/

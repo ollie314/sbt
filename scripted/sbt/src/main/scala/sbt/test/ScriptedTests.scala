@@ -6,11 +6,11 @@ package sbt
 package test
 
 import java.io.File
-import java.nio.charset.Charset
 
-import xsbt.IPC
+import scala.util.control.NonFatal
+
 import sbt.internal.scripted.{ CommentHandler, FileCommands, ScriptRunner, TestScriptParser, TestException }
-import sbt.io.{ DirectoryFilter, GlobFilter, HiddenFileFilter, Path }
+import sbt.io.{ DirectoryFilter, HiddenFileFilter }
 import sbt.io.IO.wrapNull
 import sbt.internal.io.Resources
 
@@ -30,8 +30,6 @@ final class ScriptedTests(resourceBaseDirectory: File, bufferLog: Boolean, launc
     scriptedTest(group, name, emptyCallback, log)
   def scriptedTest(group: String, name: String, prescripted: File => Unit, log: Logger): Seq[() => Option[String]] = {
     import sbt.io.syntax._
-    import GlobFilter._
-    var failed = false
     for (groupDir <- (resourceBaseDirectory * group).get; nme <- (groupDir * name).get) yield {
       val g = groupDir.getName
       val n = nme.getName
@@ -99,7 +97,7 @@ final class ScriptedTests(resourceBaseDirectory: File, bufferLog: Boolean, launc
           testFailed()
           buffered.error("  Mark as passing to remove this failure.")
           throw e
-        case e: Exception =>
+        case NonFatal(e) =>
           testFailed()
           if (!pending) throw e
       } finally { buffered.clear() }
@@ -111,9 +109,9 @@ object ScriptedTests extends ScriptedRunner {
   def main(args: Array[String]): Unit = {
     val directory = new File(args(0))
     val buffer = args(1).toBoolean
-    val sbtVersion = args(2)
-    val defScalaVersion = args(3)
-    val buildScalaVersions = args(4)
+    //  val sbtVersion = args(2)
+    //  val defScalaVersion = args(3)
+    //  val buildScalaVersions = args(4)
     val bootProperties = new File(args(5))
     val tests = args.drop(6)
     val logger = ConsoleLogger()
@@ -171,14 +169,14 @@ class ScriptedRunner {
     }
 }
 
-final case class ScriptedTest(group: String, name: String) extends NotNull {
+final case class ScriptedTest(group: String, name: String) {
   override def toString = group + "/" + name
 }
 private[test] object ListTests {
   def list(directory: File, filter: java.io.FileFilter) = wrapNull(directory.listFiles(filter))
 }
 import ListTests._
-private[test] final class ListTests(baseDirectory: File, accept: ScriptedTest => Boolean, log: Logger) extends NotNull {
+private[test] final class ListTests(baseDirectory: File, accept: ScriptedTest => Boolean, log: Logger) {
   def filter = DirectoryFilter -- HiddenFileFilter
   def listTests: Seq[ScriptedTest] =
     {

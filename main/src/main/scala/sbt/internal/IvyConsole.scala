@@ -10,7 +10,6 @@ import sbt.util.{ Level, Logger }
 import sbt.librarymanagement.{ Configurations, CrossVersion, MavenRepository, ModuleID, Resolver }
 
 import java.io.File
-import Attributed.blankSeq
 import Configurations.Compile
 import Def.Setting
 import Keys._
@@ -47,12 +46,11 @@ object IvyConsole {
   final case class Dependencies(managed: Seq[ModuleID], resolvers: Seq[Resolver], unmanaged: Seq[File])
   def parseDependencies(args: Seq[String], log: Logger): Dependencies = (Dependencies(Nil, Nil, Nil) /: args)(parseArgument(log))
   def parseArgument(log: Logger)(acc: Dependencies, arg: String): Dependencies =
-    if (arg contains " at ")
-      acc.copy(resolvers = parseResolver(arg) +: acc.resolvers)
-    else if (arg endsWith ".jar")
-      acc.copy(unmanaged = new File(arg) +: acc.unmanaged)
-    else
-      acc.copy(managed = parseManaged(arg, log) ++ acc.managed)
+    arg match {
+      case _ if arg contains " at " => acc.copy(resolvers = parseResolver(arg) +: acc.resolvers)
+      case _ if arg endsWith ".jar" => acc.copy(unmanaged = new File(arg) +: acc.unmanaged)
+      case _                        => acc.copy(managed = parseManaged(arg, log) ++ acc.managed)
+    }
 
   private[this] def parseResolver(arg: String): MavenRepository =
     {

@@ -4,13 +4,9 @@
 package sbt
 
 import java.io.PrintWriter
-import java.io.File
-import LogManager._
-import std.Transform
 import Def.ScopedKey
 import Scope.GlobalScope
-import BasicKeys.explicitGlobalLogLevels
-import Keys.{ logLevel, logManager, persistLogLevel, persistTraceLevel, sLog, state, traceLevel }
+import Keys.{ logLevel, logManager, persistLogLevel, persistTraceLevel, sLog, traceLevel }
 import scala.Console.{ BLUE, RESET }
 import sbt.internal.util.{ AttributeKey, ConsoleOut, MultiLoggerConfig, Settings, SuppressedTraceContext }
 import sbt.internal.util.MainLogging._
@@ -52,7 +48,7 @@ object LogManager {
       val screenTrace = getOr(traceLevel.key, defaultTraceLevel(state))
       val backingTrace = getOr(persistTraceLevel.key, Int.MaxValue)
       val extraBacked = state.globalLogging.backed :: Nil
-      multiLogger(new MultiLoggerConfig(console, backed, extraBacked ::: extra, screenLevel, backingLevel, screenTrace, backingTrace))
+      multiLogger(MultiLoggerConfig(console, backed, extraBacked ::: extra, screenLevel, backingLevel, screenTrace, backingTrace))
     }
   def defaultTraceLevel(state: State): Int =
     if (state.interactive) -1 else Int.MaxValue
@@ -95,8 +91,6 @@ object LogManager {
     s.put(BasicKeys.explicitGlobalLogLevels, true).put(Keys.logLevel.key, level)
   }
 
-  private[this] def setExplicitGlobalLogLevels(s: State, flag: Boolean): State =
-    s.put(BasicKeys.explicitGlobalLogLevels, flag)
   private[this] def hasExplicitGlobalLogLevels(s: State): Boolean =
     State.getBoolean(s, BasicKeys.explicitGlobalLogLevels, default = false)
 

@@ -3,8 +3,10 @@
  */
 package xsbt
 
-import java.io.{ BufferedReader, BufferedWriter, InputStream, InputStreamReader, OutputStreamWriter, OutputStream }
+import java.io.{ BufferedReader, BufferedWriter, InputStreamReader, OutputStreamWriter }
 import java.net.{ InetAddress, ServerSocket, Socket }
+
+import scala.util.control.NonFatal
 
 object IPC {
   private val portMin = 1025
@@ -28,7 +30,7 @@ object IPC {
       def createServer(attempts: Int): ServerSocket =
         if (attempts > 0)
           try { new ServerSocket(nextPort, 1, loopback) }
-          catch { case _: Exception => createServer(attempts - 1) }
+          catch { case NonFatal(e) => createServer(attempts - 1) }
         else
           sys.error("Could not connect to socket: maximum attempts exceeded")
       createServer(10)
@@ -53,14 +55,14 @@ object IPC {
     try { f(new IPC(s)) }
     finally { s.close() }
 
-  final class Server private[IPC] (s: ServerSocket) extends NotNull {
+  final class Server private[IPC] (s: ServerSocket) {
     def port = s.getLocalPort
     def close() = s.close()
     def isClosed: Boolean = s.isClosed
     def connection[T](f: IPC => T): T = IPC.ipc(s.accept())(f)
   }
 }
-final class IPC private (s: Socket) extends NotNull {
+final class IPC private (s: Socket) {
   def port = s.getLocalPort
   private val in = new BufferedReader(new InputStreamReader(s.getInputStream))
   private val out = new BufferedWriter(new OutputStreamWriter(s.getOutputStream))

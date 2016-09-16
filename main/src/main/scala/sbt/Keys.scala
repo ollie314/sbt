@@ -7,22 +7,31 @@ import java.io.File
 import java.net.URL
 import scala.concurrent.duration.{ FiniteDuration, Duration }
 import Def.ScopedKey
-import sbt.internal.util.complete._
-import sbt.internal.inc.Locate.DefinesClass
-import sbt.internal.inc.{ ClasspathOptions, MixedAnalyzingCompiler, ScalaInstance }
-import std.TaskExtra._
-import xsbti.compile.{ CompileAnalysis, CompileOptions, CompileOrder, Compilers, CompileResult, GlobalsCache, IncOptions, Inputs, PreviousResult, Setup }
+import sbt.internal.inc.ScalaInstance
+import xsbti.compile.{
+  DefinesClass,
+  ClasspathOptions,
+  CompileAnalysis,
+  CompileOptions,
+  CompileOrder,
+  Compilers,
+  CompileResult,
+  GlobalsCache,
+  IncOptions,
+  Inputs,
+  PreviousResult,
+  Setup
+}
 import scala.xml.{ Node => XNode, NodeSeq }
 import org.apache.ivy.core.module.{ descriptor, id }
 import descriptor.ModuleDescriptor, id.ModuleRevisionId
 import testing.Framework
-import sbt.internal.util.Types.Id
 import KeyRanks._
 
 import sbt.internal.{ BuildStructure, LoadedBuild, PluginDiscovery, BuildDependencies, SessionSettings }
 import sbt.io.FileFilter
 import sbt.internal.io.WatchState
-import sbt.internal.util.AttributeKey
+import sbt.internal.util.{ AttributeKey, SourcePosition }
 
 import sbt.librarymanagement.Configurations.CompilerPlugin
 import sbt.librarymanagement.{
@@ -64,7 +73,6 @@ import sbt.internal.librarymanagement.{
   UpdateLogging
 }
 import sbt.util.{ AbstractLogger, Level, Logger }
-import sbt.internal.util.SourcePosition
 
 object Keys {
   val TraceValues = "-1 to disable, 0 for up to the first sbt frame, or a positive number to set the maximum number of frames shown."
@@ -148,8 +156,6 @@ object Keys {
 
   // Output paths
   val classDirectory = SettingKey[File]("class-directory", "Directory for compiled classes and copied resources.", AMinusSetting)
-  @deprecated("Use the cacheDirectory provided by streams.", "0.13.0")
-  val cacheDirectory = SettingKey[File]("cache-directory", "Directory used for caching task data.", BMinusSetting)
   val cleanFiles = SettingKey[Seq[File]]("clean-files", "The files to recursively delete during a clean.", BSetting)
   val cleanKeepFiles = SettingKey[Seq[File]]("clean-keep-files", "Files to keep during a clean.", CSetting)
   val crossPaths = SettingKey[Boolean]("cross-paths", "If true, enables cross paths, which distinguish input and output directories for cross-building.", ASetting)
@@ -197,7 +203,7 @@ object Keys {
   val compileIncSetup = TaskKey[Setup]("inc-compile-setup", "Configures aspects of incremental compilation.", DTask)
   val compilerCache = TaskKey[GlobalsCache]("compiler-cache", "Cache of scala.tools.nsc.Global instances.  This should typically be cached so that it isn't recreated every task run.", DTask)
   val stateCompilerCache = AttributeKey[GlobalsCache]("compiler-cache", "Internal use: Global cache.")
-  val definesClass = TaskKey[DefinesClass]("defines-class", "Internal use: provides a function that determines whether the provided file contains a given class.", Invisible)
+  val classpathEntryDefinesClass = TaskKey[File => DefinesClass]("classpath-entry-defines-class", "Internal use: provides a function that determines whether the provided file contains a given class.", Invisible)
   val doc = TaskKey[File]("doc", "Generates API documentation.", AMinusTask)
   val copyResources = TaskKey[Seq[(File, File)]]("copy-resources", "Copies resources to the output directory.", AMinusTask)
   val aggregate = SettingKey[Boolean]("aggregate", "Configures task aggregation.", BMinusSetting)
@@ -275,6 +281,7 @@ object Keys {
   val defaultConfiguration = SettingKey[Option[Configuration]]("default-configuration", "Defines the configuration used when none is specified for a dependency in ivyXML.", CSetting)
 
   val products = TaskKey[Seq[File]]("products", "Build products that get packaged.", BMinusTask)
+  // TODO: This is used by exportedProducts, exportedProductsIfMissing, exportedProductsNoTracking..
   @deprecated("This task is unused by the default project and will be removed.", "0.13.0")
   val productDirectories = TaskKey[Seq[File]]("product-directories", "Base directories of build products.", CTask)
   val exportJars = SettingKey[Boolean]("export-jars", "Determines whether the exported classpath for this project contains classes (false) or a packaged jar (true).", BSetting)
@@ -426,7 +433,7 @@ object Keys {
   private[sbt] val executeProgress = SettingKey[State => TaskProgress]("executeProgress", "Experimental task execution listener.", DTask)
   private[sbt] val taskCancelStrategy = SettingKey[State => TaskCancellationStrategy]("taskCancelStrategy", "Experimental task cancellation handler.", DTask)
 
-  // Experimental in sbt 0.13.2 to enable grabing semantic compile failures.
+  // Experimental in sbt 0.13.2 to enable grabbing semantic compile failures.
   private[sbt] val compilerReporter = TaskKey[xsbti.Reporter]("compilerReporter", "Experimental hook to listen (or send) compilation failure messages.", DTask)
 
   val triggeredBy = Def.triggeredBy

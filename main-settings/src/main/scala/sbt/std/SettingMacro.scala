@@ -1,7 +1,7 @@
 package sbt
 package std
 
-import Def.{ Initialize, Setting }
+import Def.Initialize
 import sbt.internal.util.Types.{ idFun, Id }
 import sbt.internal.util.AList
 import sbt.internal.util.appmacro.{ Convert, Converted, Instance, MixedBuilder, MonadInstance }
@@ -14,22 +14,28 @@ object InitializeInstance extends MonadInstance {
   def pure[T](t: () => T): Initialize[T] = Def.pure(t)
 }
 
-import language.experimental.macros
-import scala.reflect._
 import reflect.macros._
 
 object InitializeConvert extends Convert {
   def apply[T: c.WeakTypeTag](c: Context)(nme: String, in: c.Tree): Converted[c.type] =
-    if (nme == InputWrapper.WrapInitName) {
+    nme match {
+      case InputWrapper.WrapInitName                                 => convert[T](c)(in)
+      case InputWrapper.WrapTaskName | InputWrapper.WrapInitTaskName => failTask[c.type](c)(in.pos)
+      case InputWrapper.WrapPreviousName                             => failPrevious[c.type](c)(in.pos)
+      case _                                                         => Converted.NotApplicable
+    }
+
+  private def convert[T](c: Context)(in: c.Tree): Converted[c.type] =
+    {
       val i = c.Expr[Initialize[T]](in)
       val t = c.universe.reify(i.splice).tree
       Converted.Success(t)
-    } else if (nme == InputWrapper.WrapTaskName || nme == InputWrapper.WrapInitTaskName)
-      Converted.Failure(in.pos, "A setting cannot depend on a task")
-    else if (nme == InputWrapper.WrapPreviousName)
-      Converted.Failure(in.pos, "A setting cannot depend on a task's previous value.")
-    else
-      Converted.NotApplicable
+    }
+
+  private def failTask[C <: Context with Singleton](c: C)(pos: c.Position): Converted[c.type] =
+    Converted.Failure(pos, "A setting cannot depend on a task")
+  private def failPrevious[C <: Context with Singleton](c: C)(pos: c.Position): Converted[c.type] =
+    Converted.Failure(pos, "A setting cannot depend on a task's previous value.")
 }
 
 object SettingMacro {

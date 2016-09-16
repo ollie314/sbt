@@ -3,6 +3,8 @@
  */
 package sbt
 
+import scala.collection.mutable.ListBuffer
+
 import sbt.internal.util.IDSet
 import Incomplete.{ Error, Value => IValue }
 
@@ -27,8 +29,8 @@ object Incomplete extends Enumeration {
   def transformBU(i: Incomplete)(f: Incomplete => Incomplete): Incomplete = transform(i, false)(f)
   def transform(i: Incomplete, topDown: Boolean)(f: Incomplete => Incomplete): Incomplete =
     {
-      import collection.JavaConversions._
-      val visited: collection.mutable.Map[Incomplete, Incomplete] = new java.util.IdentityHashMap[Incomplete, Incomplete]
+      import collection.JavaConverters._
+      val visited: collection.mutable.Map[Incomplete, Incomplete] = (new java.util.IdentityHashMap[Incomplete, Incomplete]).asScala
       def visit(inc: Incomplete): Incomplete =
         visited.getOrElseUpdate(inc, if (topDown) visitCauses(f(inc)) else f(visitCauses(inc)))
       def visitCauses(inc: Incomplete): Incomplete =
@@ -47,9 +49,9 @@ object Incomplete extends Enumeration {
   }
   def linearize(i: Incomplete): Seq[Incomplete] =
     {
-      var ordered = List[Incomplete]()
-      visitAll(i) { ordered ::= _ }
-      ordered
+      val ordered = ListBuffer[Incomplete]()
+      visitAll(i) { ordered += _ }
+      ordered.toList
     }
   def allExceptions(is: Seq[Incomplete]): Iterable[Throwable] =
     allExceptions(new Incomplete(None, causes = is))

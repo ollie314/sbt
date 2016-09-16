@@ -7,6 +7,11 @@ Migration notes
 - `sbt.Plugin` is also gone. Use auto plugins.
 - The incremental compiler, called Zinc, uses class-based name hashing.
 - Zinc drops support for Scala 2.8.x and 2.9.x.
+- Removed the pre-0.13.7 *.sbt file parser (previously available under `-Dsbt.parser.simple=true`)
+- Removed old, hyphen-separated key names (use `publishLocal` instead of `publish-local`)
+- Removes no-longer-documented old operators `<<=`, `<+=`, and `<++=`.
+- Renames early command feature from `--<command>` to `early(<command>)`.
+- Log options `-error`, `-warn`, `-info`, `-debug` are added as shorthand for `"early(error)"` etc.
 
 #### Additional import required
 

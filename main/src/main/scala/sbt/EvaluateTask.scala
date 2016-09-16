@@ -4,21 +4,19 @@
 package sbt
 
 import sbt.internal.{ Load, BuildStructure, TaskTimings, TaskName, GCUtil }
-import sbt.internal.util.{ ErrorHandling, RMap, Show, Signals, Types }
+import sbt.internal.util.{ Attributed, ErrorHandling, HList, RMap, Show, Signals, Types }
 import sbt.util.Logger
 import sbt.librarymanagement.{ Resolver, UpdateReport }
 
 import scala.concurrent.duration.Duration
 import java.io.File
-import Def.{ displayFull, dummyState, ScopedKey, Setting }
-import Keys.{ streams, Streams, TaskStreams }
-import Keys.{ dummyRoots, dummyStreamsManager, executionRoots, pluginData, streamsManager, taskDefinitionKey, transformState }
+import Def.{ dummyState, ScopedKey, Setting }
+import Keys.{ Streams, TaskStreams, dummyRoots, executionRoots, pluginData, streams,
+  streamsManager, transformState }
 import Project.richInitializeTask
-import Scope.{ GlobalScope, ThisScope }
-import sbt.internal.util.Types.const
-import sbt.internal.util.{ Attributed, HList }
+import Scope.GlobalScope
 import scala.Console.RED
-import std.Transform.{ DummyTaskMap, TaskAndValue }
+import std.Transform.DummyTaskMap
 import TaskName._
 
 @deprecated("Use EvaluateTaskConfig instead.", "0.13.5")
@@ -27,10 +25,8 @@ final case class EvaluateConfig(cancelable: Boolean, restrictions: Seq[Tags.Rule
 /**
  * An API that allows you to cancel executing tasks upon some signal.
  *
- *  For example, this is implemented by the TaskEngine; invoking `cancel()` allows you
- *  to cancel the current task exeuction.   A `TaskCancel` is passed to the
- *  [[TaskEvalautionCancelHandler]] which is responsible for calling `cancel()` when
- *  appropriate.
+ *  For example, this is implemented by the TaskEngine;
+ *  invoking `cancelAndShutdown()` allows you to cancel the current task execution.
  */
 trait RunningTaskEngine {
   /** Attempts to kill and shutdown the running task engine.*/
@@ -99,22 +95,7 @@ sealed trait EvaluateTaskConfig {
    */
   def minForcegcInterval: Duration
 }
-final object EvaluateTaskConfig {
-  /** Pulls in the old configuration format. */
-  def apply(old: EvaluateConfig): EvaluateTaskConfig = {
-    object AdaptedTaskConfig extends EvaluateTaskConfig {
-      def restrictions: Seq[Tags.Rule] = old.restrictions
-      def checkCycles: Boolean = old.checkCycles
-      def progressReporter: ExecuteProgress[Task] = old.progress
-      def cancelStrategy: TaskCancellationStrategy =
-        if (old.cancelable) TaskCancellationStrategy.Signal
-        else TaskCancellationStrategy.Null
-      def forceGarbageCollection = GCUtil.defaultForceGarbageCollection
-      def minForcegcInterval = GCUtil.defaultMinForcegcInterval
-    }
-    AdaptedTaskConfig
-  }
-
+object EvaluateTaskConfig {
   @deprecated("Use the alternative that specifies minForcegcInterval", "0.13.9")
   def apply(restrictions: Seq[Tags.Rule],
     checkCycles: Boolean,
@@ -152,18 +133,9 @@ final object EvaluateTaskConfig {
 final case class PluginData(dependencyClasspath: Seq[Attributed[File]], definitionClasspath: Seq[Attributed[File]], resolvers: Option[Seq[Resolver]], report: Option[UpdateReport], scalacOptions: Seq[String]) {
   val classpath: Seq[Attributed[File]] = definitionClasspath ++ dependencyClasspath
 }
-object PluginData {
-  @deprecated("Use the alternative that specifies the compiler options and specific classpaths.", "0.13.1")
-  def apply(dependencyClasspath: Seq[Attributed[File]], definitionClasspath: Seq[Attributed[File]], resolvers: Option[Seq[Resolver]], report: Option[UpdateReport]): PluginData =
-    PluginData(dependencyClasspath, definitionClasspath, resolvers, report, Nil)
-  @deprecated("Use the alternative that specifies the specific classpaths.", "0.13.0")
-  def apply(classpath: Seq[Attributed[File]], resolvers: Option[Seq[Resolver]], report: Option[UpdateReport]): PluginData =
-    PluginData(classpath, Nil, resolvers, report, Nil)
-}
 
 object EvaluateTask {
-  import std.{ TaskExtra, Transform }
-  import TaskExtra._
+  import std.Transform
   import Keys.state
 
   private[sbt] def defaultProgress: ExecuteProgress[Task] =
@@ -245,7 +217,7 @@ object EvaluateTask {
 
   def injectSettings: Seq[Setting[_]] = Seq(
     (state in GlobalScope) ::= dummyState,
-    (streamsManager in GlobalScope) ::= dummyStreamsManager,
+    (streamsManager in GlobalScope) ::= Def.dummyStreamsManager,
     (executionRoots in GlobalScope) ::= dummyRoots
   )
 
@@ -260,10 +232,6 @@ object EvaluateTask {
       processResult(result, log)
     }
 
-  @deprecated("This method does not apply state changes requested during task execution and does not honor concurrent execution restrictions.  Use 'apply' instead.", "0.11.1")
-  def evaluateTask[T](structure: BuildStructure, taskKey: ScopedKey[Task[T]], state: State, ref: ProjectRef, checkCycles: Boolean = false, maxWorkers: Int = SystemProcessors): Option[Result[T]] =
-    apply(structure, taskKey, state, ref, EvaluateConfig(false, defaultRestrictions(maxWorkers), checkCycles)).map(_._2)
-
   /**
    * Evaluates `taskKey` and returns the new State and the result of the task wrapped in Some.
    * If the task is not defined, None is returned.  The provided task key is resolved against the current project `ref`.
@@ -277,9 +245,6 @@ object EvaluateTask {
    * If the task is not defined, None is returned.  The provided task key is resolved against the current project `ref`.
    * `config` configures concurrency and canceling of task execution.
    */
-  @deprecated("Use EvaluateTaskConfig option instead.", "0.13.5")
-  def apply[T](structure: BuildStructure, taskKey: ScopedKey[Task[T]], state: State, ref: ProjectRef, config: EvaluateConfig): Option[(State, Result[T])] =
-    apply(structure, taskKey, state, ref, EvaluateTaskConfig(config))
   def apply[T](structure: BuildStructure, taskKey: ScopedKey[Task[T]], state: State, ref: ProjectRef, config: EvaluateTaskConfig): Option[(State, Result[T])] = {
     withStreams(structure, state) { str =>
       for ((task, toNode) <- getTask(structure, taskKey, state, str, ref)) yield runTask(task, state, str, structure.index.triggers, config)(toNode)
@@ -289,7 +254,6 @@ object EvaluateTask {
   def logIncomplete(result: Incomplete, state: State, streams: Streams): Unit = {
     val all = Incomplete linearize result
     val keyed = for (Incomplete(Some(key: ScopedKey[_]), _, msg, _, ex) <- all) yield (key, msg, ex)
-    val un = all.filter { i => i.node.isEmpty || i.message.isEmpty }
 
     import ExceptionCategory._
     for ((key, msg, Some(ex)) <- keyed) {
@@ -327,17 +291,11 @@ object EvaluateTask {
       for (t <- structure.data.get(resolvedScope, taskKey.key)) yield (t, nodeView(state, streams, taskKey :: Nil))
     }
   def nodeView[HL <: HList](state: State, streams: Streams, roots: Seq[ScopedKey[_]], dummies: DummyTaskMap = DummyTaskMap(Nil)): NodeView[Task] =
-    Transform((dummyRoots, roots) :: (dummyStreamsManager, streams) :: (dummyState, state) :: dummies)
+    Transform((dummyRoots, roots) :: (Def.dummyStreamsManager, streams) :: (dummyState, state) :: dummies)
 
-  @deprecated("Use new EvaluateTaskConfig option to runTask", "0.13.5")
-  def runTask[T](root: Task[T], state: State, streams: Streams, triggers: Triggers[Task], config: EvaluateConfig)(implicit taskToNode: NodeView[Task]): (State, Result[T]) =
-    {
-      val newConfig = EvaluateTaskConfig(config)
-      runTask(root, state, streams, triggers, newConfig)(taskToNode)
-    }
   def runTask[T](root: Task[T], state: State, streams: Streams, triggers: Triggers[Task], config: EvaluateTaskConfig)(implicit taskToNode: NodeView[Task]): (State, Result[T]) =
     {
-      import ConcurrentRestrictions.{ completionService, TagMap, Tag, tagged, tagsKey }
+      import ConcurrentRestrictions.{ completionService, tagged, tagsKey }
 
       val log = state.log
       log.debug(s"Running task... Cancel: ${config.cancelStrategy}, check cycles: ${config.checkCycles}, forcegc: ${config.forceGarbageCollection}")
@@ -406,7 +364,7 @@ object EvaluateTask {
     case in @ Incomplete(Some(node: Task[_]), _, _, _, _) => in.copy(node = transformNode(node))
     case i => i
   }
-  type AnyCyclic = Execute[Task]#CyclicException[_]
+  type AnyCyclic = Execute[({ type A[_] <: AnyRef })#A]#CyclicException[_]
   def convertCyclicInc: Incomplete => Incomplete = {
     case in @ Incomplete(_, _, _, _, Some(c: AnyCyclic)) =>
       in.copy(directCause = Some(new RuntimeException(convertCyclic(c))))
@@ -439,10 +397,12 @@ object EvaluateTask {
   // if the return type Seq[Setting[_]] is not explicitly given, scalac hangs
   val injectStreams: ScopedKey[_] => Seq[Setting[_]] = scoped =>
     if (scoped.key == streams.key)
-      Seq(streams in scoped.scope <<= streamsManager map { mgr =>
-        val stream = mgr(scoped)
-        stream.open()
-        stream
+      Seq(streams in scoped.scope := {
+        (streamsManager map { mgr =>
+          val stream = mgr(scoped)
+          stream.open()
+          stream
+        }).value
       })
     else
       Nil

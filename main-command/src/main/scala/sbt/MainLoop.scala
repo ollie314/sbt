@@ -4,7 +4,7 @@
 package sbt
 
 import scala.annotation.tailrec
-import java.io.{ File, PrintWriter }
+import scala.util.control.NonFatal
 import jline.TerminalFactory
 
 import sbt.io.Using
@@ -52,7 +52,7 @@ object MainLoop {
       case e: xsbti.FullReload =>
         deleteLastLog(logBacking)
         throw e // pass along a reboot request
-      case e: Throwable =>
+      case NonFatal(e) =>
         System.err.println("sbt appears to be exiting abnormally.\n  The log file for this session is at " + logBacking.file)
         deleteLastLog(logBacking)
         throw e

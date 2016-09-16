@@ -1,5 +1,6 @@
 package sbt
 
+import sbt.util.Level
 import sbt.internal.util.{ AttributeKey, FullReader }
 import sbt.internal.util.complete.{ Completion, Completions, DefaultParsers, History => CHistory, HistoryCommands, Parser, TokenCompletions }
 import sbt.internal.util.Types.{ const, idFun }
@@ -8,7 +9,6 @@ import sbt.internal.inc.ModuleUtilities
 import DefaultParsers._
 import Function.tupled
 import Command.applyEffect
-import HistoryCommands.{ Start => HistoryPrefix }
 import BasicCommandStrings._
 import CommandUtil._
 import BasicKeys._
@@ -25,7 +25,15 @@ object BasicCommands {
   def ignore = Command.command(FailureWall)(idFun)
 
   def early = Command.arb(earlyParser, earlyHelp) { (s, other) => other :: s }
-  private[this] def earlyParser = (s: State) => token(EarlyCommand).flatMap(_ => otherCommandParser(s))
+  private[this] def levelParser: Parser[String] =
+    token(Level.Debug.toString) | token(Level.Info.toString) | token(Level.Warn.toString) | token(Level.Error.toString)
+  private[this] def earlyParser: State => Parser[String] = (s: State) =>
+    (token(EarlyCommand + "(") flatMap { _ =>
+      otherCommandParser(s) <~ token(")")
+    }) |
+      (token("-") flatMap { _ =>
+        levelParser
+      })
   private[this] def earlyHelp = Help(EarlyCommand, EarlyCommandBrief, EarlyCommandDetailed)
 
   def help = Command.make(HelpCommand, helpBrief, helpDetailed)(helpParser)
@@ -58,7 +66,7 @@ object BasicCommands {
   def completionsCommand = Command.make(CompletionsCommand, CompletionsBrief, CompletionsDetailed)(completionsParser)
   def completionsParser(state: State) =
     {
-      val notQuoted = (NotQuoted ~ any.*) map { case (nq, s) => (nq +: s).mkString }
+      val notQuoted = (NotQuoted ~ any.*) map { case (nq, s) => nq ++ s }
       val quotedOrUnquotedSingleArgument = Space ~> (StringVerbatim | StringEscapable | notQuoted)
 
       applyEffect(token(quotedOrUnquotedSingleArgument ?? "" examples ("", " ")))(runCompletions(state))

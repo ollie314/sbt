@@ -1,8 +1,6 @@
 package sbt
 package std
 
-import language.experimental.macros
-import scala.reflect._
 import reflect.macros._
 
 private[sbt] object KeyMacro {
@@ -21,7 +19,7 @@ private[sbt] object KeyMacro {
 
   def keyImpl[T: c.WeakTypeTag, S: c.WeakTypeTag](c: Context)(f: (c.Expr[String], c.Expr[Manifest[T]]) => c.Expr[S]): c.Expr[S] =
     {
-      import c.universe.{ Apply => ApplyTree, _ }
+      import c.universe._
       val enclosingValName = definingValName(c, methodName => s"""$methodName must be directly assigned to a val, such as `val x = $methodName[Int]("description")`.""")
       val name = c.Expr[String](Literal(Constant(enclosingValName)))
       val mf = c.Expr[Manifest[T]](c.inferImplicitValue(weakTypeOf[Manifest[T]]))
@@ -31,7 +29,7 @@ private[sbt] object KeyMacro {
     {
       import c.universe.{ Apply => ApplyTree, _ }
       val methodName = c.macroApplication.symbol.name
-      def processName(n: Name): String = n.decoded.trim // trim is not strictly correct, but macros don't expose the API necessary
+      def processName(n: Name): String = n.decodedName.toString.trim // trim is not strictly correct, but macros don't expose the API necessary
       def enclosingVal(trees: List[c.Tree]): String =
         {
           trees match {
@@ -40,7 +38,7 @@ private[sbt] object KeyMacro {
             // lazy val x: X = <methodName> has this form for some reason (only when the explicit type is present, though)
             case Block(_, _) :: DefDef(mods, name, _, _, _, _) :: xs if mods.hasFlag(Flag.LAZY) => processName(name)
             case _ =>
-              c.error(c.enclosingPosition, invalidEnclosingTree(methodName.decoded))
+              c.error(c.enclosingPosition, invalidEnclosingTree(methodName.decodedName.toString))
               "<error>"
           }
         }

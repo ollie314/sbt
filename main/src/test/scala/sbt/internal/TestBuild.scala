@@ -3,15 +3,12 @@ package internal
 
 import Def.{ ScopedKey, Setting }
 import sbt.internal.util.{ AttributeKey, AttributeMap, Relation, Settings }
-import sbt.internal.util.Types.{ const, idFun, some }
+import sbt.internal.util.Types.{ const, some }
 import sbt.internal.util.complete.Parser
 
-import java.io.File
 import java.net.URI
 import org.scalacheck._
-import Prop._
 import Gen._
-import Arbitrary.arbBool
 
 // Notes:
 //  Generator doesn't produce cross-build project dependencies or do anything with the 'extra' axis
@@ -59,7 +56,7 @@ object TestBuild {
     lazy val allAttributeKeys: Set[AttributeKey[_]] = data.data.values.flatMap(_.keys).toSet
     lazy val (taskAxes, globalTaskAxis, onlyTaskAxis, multiTaskAxis) =
       {
-        import collection.{ breakOut, mutable }
+        import collection.mutable
         import mutable.HashSet
 
         // task axis of Scope is set to Global and the value of the second map is the original task axis
@@ -77,10 +74,11 @@ object TestBuild {
             global += skey
           else {
             val keys = tasks map makeKey
-            if (keys.size == 1)
-              single ++= keys
-            else if (keys.size > 1)
-              multi ++= keys
+            keys.size match {
+              case 0 =>
+              case 1 => single ++= keys
+              case _ => multi ++= keys
+            }
           }
         }
         (taskAxes, global.toSet, single.toSet, multi.toSet)
@@ -99,7 +97,7 @@ object TestBuild {
     def inheritConfig(ref: ResolvedReference, config: ConfigKey) = projectFor(ref).confMap(config.name).extended map toConfigKey
     def inheritTask(task: AttributeKey[_]) = taskMap.get(task) match { case None => Nil; case Some(t) => t.delegates map getKey }
     def inheritProject(ref: ProjectRef) = project(ref).delegates
-    def resolve(ref: Reference) = Scope.resolveReference(builds.head.uri, rootProject, ref)
+    def resolve(ref: Reference) = Scope.resolveReference(root.uri, rootProject, ref)
     lazy val delegates: Scope => Seq[Scope] =
       Scope.delegates(
         allProjects,

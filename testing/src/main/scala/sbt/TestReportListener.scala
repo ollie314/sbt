@@ -6,26 +6,31 @@ package sbt
 
 import testing.{ Logger => TLogger, Event => TEvent, Status => TStatus }
 import sbt.internal.util.{ BufferedLogger, FullLogger }
-import sbt.util.{ Level, Logger }
+import sbt.util.Level
 
 trait TestReportListener {
   /** called for each class or equivalent grouping */
-  def startGroup(name: String)
+  def startGroup(name: String): Unit
+
   /** called for each test method or equivalent */
-  def testEvent(event: TestEvent)
+  def testEvent(event: TestEvent): Unit
+
   /** called if there was an error during test */
-  def endGroup(name: String, t: Throwable)
+  def endGroup(name: String, t: Throwable): Unit
+
   /** called if test completed */
-  def endGroup(name: String, result: TestResult.Value)
+  def endGroup(name: String, result: TestResult.Value): Unit
+
   /** Used by the test framework for logging test results*/
   def contentLogger(test: TestDefinition): Option[ContentLogger] = None
 }
 
 trait TestsListener extends TestReportListener {
   /** called once, at beginning. */
-  def doInit()
+  def doInit(): Unit
+
   /** called once, at end. */
-  def doComplete(finalResult: TestResult.Value)
+  def doComplete(finalResult: TestResult.Value): Unit
 }
 
 /** Provides the overall `result` of a group of tests (a suite) and test counts for each result type. */
@@ -71,10 +76,13 @@ object TestEvent {
 
   private[sbt] def overallResult(events: Seq[TEvent]): TestResult.Value =
     (TestResult.Passed /: events) { (sum, event) =>
-      val status = event.status
-      if (sum == TestResult.Error || status == TStatus.Error) TestResult.Error
-      else if (sum == TestResult.Failed || status == TStatus.Failure) TestResult.Failed
-      else TestResult.Passed
+      (sum, event.status) match {
+        case (TestResult.Error, _)  => TestResult.Error
+        case (_, TStatus.Error)     => TestResult.Error
+        case (TestResult.Failed, _) => TestResult.Failed
+        case (_, TStatus.Failure)   => TestResult.Failed
+        case _                      => TestResult.Passed
+      }
     }
 }
 

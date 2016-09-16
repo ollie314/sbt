@@ -8,7 +8,6 @@ import testing.{ Logger => _, _ }
 import java.net.ServerSocket
 import java.io._
 import Tests.{ Output => TestOutput, _ }
-import ForkMain._
 import sbt.io.IO
 import sbt.util.Logger
 
@@ -42,7 +41,7 @@ private[sbt] object ForkTests {
         val resultsAcc = mutable.Map.empty[String, SuiteResult]
         lazy val result = TestOutput(overall(resultsAcc.values.map(_.result)), resultsAcc.toMap, Iterable.empty)
 
-        def run() {
+        def run(): Unit = {
           val socket =
             try {
               server.accept()

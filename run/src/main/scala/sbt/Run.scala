@@ -4,7 +4,6 @@
 package sbt
 
 import java.io.File
-import java.net.{ URL, URLClassLoader }
 import java.lang.reflect.{ Method, Modifier }
 import Modifier.{ isPublic, isStatic }
 import sbt.internal.inc.classpath.ClasspathUtilities
@@ -18,9 +17,6 @@ trait ScalaRun {
   def run(mainClass: String, classpath: Seq[File], options: Seq[String], log: Logger): Option[String]
 }
 class ForkRun(config: ForkOptions) extends ScalaRun {
-  @deprecated("Use the `ForkRun(ForkOptions) constructor`", "0.13.0")
-  def this(options: ForkScalaRun) = this(ForkOptions(options.javaHome, options.outputStrategy, options.scalaJars.toSeq, options.workingDirectory, options.runJVMOptions, options.connectInput))
-
   def run(mainClass: String, classpath: Seq[File], options: Seq[String], log: Logger): Option[String] =
     {
       log.info("Running " + mainClass + " " + options.mkString(" "))

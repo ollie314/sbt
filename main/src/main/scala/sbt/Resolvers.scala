@@ -5,7 +5,6 @@
 package sbt
 
 import sbt.internal.BuildLoader
-import sbt.internal.librarymanagement.StringUtilities
 
 import sbt.io.{ Hash, IO }
 
@@ -17,6 +16,7 @@ import RichURI.fromURI
 import java.util.Locale
 
 import scala.sys.process.Process
+import scala.util.control.NonFatal
 
 object Resolvers {
   type Resolver = BuildLoader.Resolver
@@ -97,9 +97,9 @@ object Resolvers {
   abstract class DistributedVCS {
     val scheme: String
 
-    def clone(from: String, to: File)
+    def clone(from: String, to: File): Unit
 
-    def checkout(branch: String, in: File)
+    def checkout(branch: String, in: File): Unit
 
     def toResolver: Resolver = (info: ResolveInfo) => {
       val uri = info.uri.withoutMarkerScheme
@@ -147,7 +147,7 @@ object Resolvers {
         try {
           f
         } catch {
-          case e: Throwable =>
+          case NonFatal(e) =>
             IO.delete(file)
             throw e
         }
@@ -167,7 +167,7 @@ object Resolvers {
     }
 
   private[this] def normalizeDirectoryName(name: String): String =
-    StringUtilities.normalize(dropExtensions(name))
+    dropExtensions(name).toLowerCase(Locale.ENGLISH).replaceAll("""\W+""", "-")
 
   private[this] def dropExtensions(name: String): String = name.takeWhile(_ != '.')
 

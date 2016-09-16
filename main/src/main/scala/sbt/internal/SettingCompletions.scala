@@ -5,12 +5,10 @@ import sbt.internal.util.{ AttributeKey, complete, Relation, Settings, Show, Typ
 
 import sbt.librarymanagement.Configuration
 
-import java.io.File
-import java.net.URI
 import Project._
 import Def.{ ScopedKey, Setting }
-import Scope.{ GlobalScope, ThisScope }
-import Types.{ const, idFun, Id }
+import Scope.GlobalScope
+import Types.{ const, idFun }
 import complete._
 import DefaultParsers._
 
@@ -42,7 +40,7 @@ private[sbt] object SettingCompletions {
           val globalSetting = resolve(Def.setting(global, setting.init, setting.pos))
           globalSetting ++ allDefs.flatMap { d =>
             if (d.key == akey)
-              Seq(SettingKey(akey) in d.scope <<= global)
+              Seq(SettingKey(akey) in d.scope := { global.value })
             else
               Nil
           }
@@ -58,7 +56,6 @@ private[sbt] object SettingCompletions {
       import extracted._
       val append = Load.transformSettings(Load.projectScope(currentRef), currentRef.build, rootProject, settings)
       val newSession = session.appendSettings(append map (a => (a, arg.split('\n').toList)))
-      val struct = extracted.structure
       val r = relation(newSession.mergeSettings, true)(structure.delegates, structure.scopeLocal, implicitly)
       setResult(newSession, r, append)
     }
@@ -113,8 +110,7 @@ private[sbt] object SettingCompletions {
    */
   def settingParser(settings: Settings[Scope], rawKeyMap: Map[String, AttributeKey[_]], context: ResolvedProject): Parser[String] =
     {
-      val cutoff = KeyRanks.MainCutoff
-      val keyMap: Map[String, AttributeKey[_]] = rawKeyMap.map { case (k, v) => (keyScalaID(k), v) } toMap;
+      val keyMap: Map[String, AttributeKey[_]] = rawKeyMap.map { case (k, v) => (keyScalaID(k), v) }.toMap
       def inputScopedKey(pred: AttributeKey[_] => Boolean): Parser[ScopedKey[_]] =
         scopedKeyParser(keyMap.filter { case (_, k) => pred(k) }, settings, context)
       val full = for {
@@ -286,10 +282,13 @@ private[sbt] object SettingCompletions {
   def keyType[S](key: AttributeKey[_])(onSetting: Manifest[_] => S, onTask: Manifest[_] => S, onInput: Manifest[_] => S)(implicit tm: Manifest[Task[_]], im: Manifest[InputTask[_]]): S =
     {
       def argTpe = key.manifest.typeArguments.head
-      val e = key.manifest.runtimeClass
-      if (e == tm.runtimeClass) onTask(argTpe)
-      else if (e == im.runtimeClass) onInput(argTpe)
-      else onSetting(key.manifest)
+      val TaskClass = tm.runtimeClass
+      val InputTaskClass = im.runtimeClass
+      key.manifest.runtimeClass match {
+        case TaskClass      => onTask(argTpe)
+        case InputTaskClass => onInput(argTpe)
+        case _              => onSetting(key.manifest)
+      }
     }
 
   /** For a Task[T], InputTask[T], or Setting[T], this returns the manifest for T. */

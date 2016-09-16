@@ -2,18 +2,18 @@ import scala.xml._
 
 lazy val root = (project in file(".")).
   settings(
-    ivyPaths <<= (baseDirectory, target)( (dir, t) => new IvyPaths(dir, Some(t / "ivy-cache"))),
-    ivyXML <<= (customInfo, organization, moduleName, version) apply inlineXML,
+    ivyPaths := (baseDirectory, target)( (dir, t) => new IvyPaths(dir, Some(t / "ivy-cache"))).value,
+    ivyXML := ((customInfo, organization, moduleName, version) apply inlineXML).value,
     scalaVersion := "2.9.1",
     projectID ~= (_ cross false),
-    customInfo <<= baseDirectory{_ / "info" exists },
-    TaskKey[Unit]("check-download") <<= checkDownload,
-    delivered <<= deliverLocal map XML.loadFile,
-    TaskKey[Unit]("check-info") <<= checkInfo
+    customInfo := (baseDirectory{_ / "info" exists }).value,
+    TaskKey[Unit]("check-download") := checkDownload.value,
+    delivered := (deliverLocal map XML.loadFile).value,
+    TaskKey[Unit]("check-info") := checkInfo.value
   )
 
-lazy val delivered = TaskKey[NodeSeq]("delivered")
-lazy val customInfo = SettingKey[Boolean]("custom-info")
+lazy val delivered = taskKey[NodeSeq]("")
+lazy val customInfo = settingKey[Boolean]("")
 
 def inlineXML(addInfo: Boolean, organization: String, moduleID: String, version: String): NodeSeq =
   if(addInfo)

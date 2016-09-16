@@ -23,16 +23,16 @@ trait Watched {
    */
   def pollInterval: Int = Watched.PollDelayMillis
   /** The message to show when triggered execution waits for sources to change.*/
-  def watchingMessage(s: WatchState): String = Watched.defaultWatchingMessage(s)
+  private[sbt] def watchingMessage(s: WatchState): String = Watched.defaultWatchingMessage(s)
   /** The message to show before an action is run. */
-  def triggeredMessage(s: WatchState): String = Watched.defaultTriggeredMessage(s)
+  private[sbt] def triggeredMessage(s: WatchState): String = Watched.defaultTriggeredMessage(s)
 }
 
 object Watched {
   val defaultWatchingMessage: WatchState => String = _.count + ". Waiting for source changes... (press enter to interrupt)"
   val defaultTriggeredMessage: WatchState => String = const("")
   val clearWhenTriggered: WatchState => String = const(clearScreen)
-  def clearScreen: String = "\033[2J\033[0;0H"
+  def clearScreen: String = "\u001b[2J\u001b[0;0H"
 
   private[this] class AWatched extends Watched
 
@@ -52,23 +52,24 @@ object Watched {
 
   def executeContinuously(watched: Watched, s: State, next: String, repeat: String): State =
     {
-      @tailrec def shouldTerminate: Boolean = (System.in.available > 0) && (watched.terminateWatch(System.in.read()) || shouldTerminate)
+      @tailrec def shouldTerminate: Boolean =
+        (System.in.available > 0) && (watched.terminateWatch(System.in.read()) || shouldTerminate)
       val sourcesFinder = PathFinder { watched watchPaths s }
       val watchState = s get ContinuousState getOrElse WatchState.empty
 
       if (watchState.count > 0)
         printIfDefined(watched watchingMessage watchState)
 
-      val (triggered, newWatchState, newState) =
+      val (triggered, newWatchState) =
         try {
           val (triggered, newWatchState) = SourceModificationWatch.watch(sourcesFinder, watched.pollInterval, watchState)(shouldTerminate)
-          (triggered, newWatchState, s)
+          (triggered, newWatchState)
         } catch {
           case e: Exception =>
             val log = s.log
             log.error("Error occurred obtaining files to watch.  Terminating continuous execution...")
             State.handleException(e, s, log)
-            (false, watchState, s.fail)
+            (false, watchState)
         }
 
       if (triggered) {

@@ -6,15 +6,15 @@ package sbt
 import Predef.{ conforms => _, _ }
 import java.io.File
 import java.util.jar.{ Attributes, Manifest }
-import collection.JavaConversions._
+import collection.JavaConverters._
 import sbt.internal.util.Types.:+:
 import sbt.io.syntax._
 import sbt.io.IO
 
 import sbinary.{ DefaultProtocol, Format }
-import DefaultProtocol.{ FileFormat, immutableMapFormat, StringFormat, UnitFormat }
+import DefaultProtocol.{ FileFormat, immutableMapFormat, StringFormat }
 import sbt.internal.util.{ Cache, FileInfo, FilesInfo, HNil, ModifiedFileInfo, PlainFileInfo, Tracked }
-import Cache.{ defaultEquiv, hConsCache, hNilCache, streamFormat, wrapIn }
+import Cache.{ defaultEquiv, hConsCache, hNilCache, streamFormat }
 import Tracked.{ inputChanged, outputChanged }
 import FileInfo.exists
 import FilesInfo.lastModified
@@ -34,12 +34,12 @@ object Package {
       new ManifestAttributes(converted: _*)
     }
 
-  def mergeAttributes(a1: Attributes, a2: Attributes) = a1 ++= a2
+  def mergeAttributes(a1: Attributes, a2: Attributes) = a1.asScala ++= a2.asScala
   // merges `mergeManifest` into `manifest` (mutating `manifest` in the process)
   def mergeManifests(manifest: Manifest, mergeManifest: Manifest): Unit = {
     mergeAttributes(manifest.getMainAttributes, mergeManifest.getMainAttributes)
-    val entryMap = mapAsScalaMap(manifest.getEntries)
-    for ((key, value) <- mergeManifest.getEntries) {
+    val entryMap = manifest.getEntries.asScala
+    for ((key, value) <- mergeManifest.getEntries.asScala) {
       entryMap.get(key) match {
         case Some(attributes) => mergeAttributes(attributes, value)
         case None             => entryMap put (key, value)
@@ -55,7 +55,7 @@ object Package {
       option match {
         case JarManifest(mergeManifest)          => mergeManifests(manifest, mergeManifest)
         case MainClass(mainClassName)            => main.put(Attributes.Name.MAIN_CLASS, mainClassName)
-        case ManifestAttributes(attributes @ _*) => main ++= attributes
+        case ManifestAttributes(attributes @ _*) => main.asScala ++= attributes
         case _                                   => log.warn("Ignored unknown package option " + option)
       }
     }

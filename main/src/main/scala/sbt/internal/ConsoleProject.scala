@@ -5,10 +5,7 @@ package sbt
 package internal
 
 import sbt.util.Logger
-import java.io.File
-import sbt.librarymanagement.Resolver
-import sbt.internal.librarymanagement.{ InlineIvyConfiguration, IvyPaths }
-import sbt.internal.inc.{ AnalyzingCompiler, ClasspathOptions, IncrementalCompilerImpl, ScalaInstance }
+import sbt.internal.inc.{ ClasspathOptionsUtil, ScalaInstance }
 
 object ConsoleProject {
   def apply(state: State, extra: String, cleanupCommands: String = "", options: Seq[String] = Nil)(implicit log: Logger): Unit = {
@@ -22,7 +19,7 @@ object ConsoleProject {
       ScalaInstance(scalaProvider.version, scalaProvider.launcher)
     }
     val sourcesModule = extracted.get(Keys.scalaCompilerBridgeSource)
-    val compiler = Compiler.scalaCompiler(scalaInstance, ClasspathOptions.repl, None, ivyConf, sourcesModule)(state.configuration, log)
+    val compiler = Compiler.scalaCompiler(scalaInstance, ClasspathOptionsUtil.repl, None, ivyConf, sourcesModule)(state.configuration, log)
     val imports = BuildUtil.getImports(unit.unit) ++ BuildUtil.importAll(bindings.map(_._1))
     val importString = imports.mkString("", ";\n", ";\n\n")
     val initCommands = importString + extra
@@ -38,7 +35,4 @@ object ConsoleProject {
     implicit def settingKeyEvaluate[T](s: SettingKey[T]): Evaluate[T] = new Evaluate(get(s))
   }
   final class Evaluate[T] private[sbt] (val eval: T)
-  private def bootIvyHome(app: xsbti.AppConfiguration): Option[File] =
-    try { Option(app.provider.scalaProvider.launcher.ivyHome) }
-    catch { case _: NoSuchMethodError => None }
 }
